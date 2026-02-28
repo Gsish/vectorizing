@@ -38,8 +38,8 @@ USER appuser
 # Set environment variables
 ENV PORT=5000
 
-# Expose the port
-EXPOSE $PORT
+# Expose a default port (Railway overrides this)
+EXPOSE 8000
 
-# Define the command to run the application
-CMD ["gunicorn", "-w", "4", "vectorizing:create_app()", "--timeout", "0", "-b", "0.0.0.0:5000"]
+# Define the command to run the application using the dynamic PORT variable
+CMD gunicorn -w 4 "vectorizing:create_app()" --timeout 0 -b "0.0.0.0:${PORT:-8000}"
