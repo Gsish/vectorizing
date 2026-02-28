@@ -2,12 +2,16 @@ import os
 
 REQUIRED_ENVIRONMENT_VARIABLES = {
     'PORT': int,
-    'S3_BUCKET': str
+    'DATABASE_URL': str,
+    'R2_ACCOUNT_ID': str,
+    'R2_ACCESS_KEY_ID': str,
+    'R2_SECRET_ACCESS_KEY': str,
+    'R2_BUCKET_NAME': str,
+    'R2_PUBLIC_DOMAIN': str,
 }
 
 OPTIONAL_ENVIRONMENT_VARIABLES = {
     'SENTRY_DSN': str,
-    'S3_TEST_BUCKET': str
 }
 
 class VariableNotDefinedException(Exception):

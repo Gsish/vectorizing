@@ -1,43 +1,60 @@
+import os
 import cuid
 import boto3
 
-S3 = boto3.client("s3", region_name="eu-central-1")
+S3 = None
 
-def upload_markup (markup, s3_bucket_name):
+def get_client():
+    global S3
+    if S3 is None:
+        S3 = boto3.client(
+            "s3",
+            endpoint_url=f"https://{os.environ.get('R2_ACCOUNT_ID')}.r2.cloudflarestorage.com",
+            aws_access_key_id=os.environ.get('R2_ACCESS_KEY_ID'),
+            aws_secret_access_key=os.environ.get('R2_SECRET_ACCESS_KEY'),
+            region_name="auto"
+        )
+    return S3
+
+def upload_markup(markup, bucket_name):
     cuid_str = cuid.cuid()
 
-    S3.put_object(
+    get_client().put_object(
         Body = markup.encode('utf-8'),
-        Bucket = s3_bucket_name,
+        Bucket = bucket_name,
         Key = cuid_str,
         ContentType = "image/svg+xml",
     )
 
     return cuid_str
 
-def get_object_url(s3_file_key, s3_bucket_name):
+def get_object_url(file_key, bucket_name, public_domain=None):
+    if public_domain:
+        return f"{public_domain.rstrip('/')}/{file_key}"
+    
     try:
-        S3.get_object(
-            Key=s3_file_key,
-            Bucket=s3_bucket_name
+        get_client().get_object(
+            Key=file_key,
+            Bucket=bucket_name
         )
 
     except(Exception):
         return None
 
-    return S3.generate_presigned_url(
+    return get_client().generate_presigned_url(
         ClientMethod="get_object",
-        Params={"Bucket": s3_bucket_name, "Key": s3_file_key},
+        Params={"Bucket": bucket_name, "Key": file_key},
     ).split("?")[0]
 
 def upload_file(
     local_file_path,
-    s3_bucket_name,
-    s3_file_key,
+    bucket_name,
+    file_key,
+    public_domain=None
 ):
-    S3.upload_file(
+    get_client().upload_file(
         local_file_path,
-        s3_bucket_name,
-        s3_file_key,
+        bucket_name,
+        file_key,
     )
-    return get_object_url(s3_file_key, s3_bucket_name)
+    return get_object_url(file_key, bucket_name, public_domain)

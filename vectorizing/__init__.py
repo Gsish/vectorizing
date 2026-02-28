@@ -9,6 +9,7 @@ from vectorizing.server.s3 import upload_markup
 from vectorizing.svg.markup import generate_SVG_markup
 from vectorizing.util.read import try_read_image_from_url
 from vectorizing.server.env import get_required, get_optional
+import psycopg2
 from vectorizing.solvers.color.ColorSolver import ColorSolver
 from vectorizing.solvers.binary.BinarySolver import BinarySolver
 from vectorizing.geometry.bounds import compound_paths_bounds
@@ -21,12 +22,16 @@ PYTHON_ENV = os.getenv("PYTHON_ENV", "development")
 
 (
     PORT,
-    S3_BUCKET,
+    DATABASE_URL,
+    R2_ACCOUNT_ID,
+    R2_ACCESS_KEY_ID,
+    R2_SECRET_ACCESS_KEY,
+    R2_BUCKET_NAME,
+    R2_PUBLIC_DOMAIN,
 ) = get_required()
 
 (
     SENTRY_DSN,
-    S3_TEST_BUCKET
 ) = get_optional()
 
 setup_logs()
@@ -61,7 +66,8 @@ def validate_args(args):
         solver=solver,
         url=args.get("url"),
         raw=args.get("raw"),
-        color_count=args.get("color_count")
+        color_count=args.get("color_count"),
+        email=args.get("email")
     )
 
 def invalid_args():
@@ -87,6 +93,7 @@ def create_app(test_config=None):
         color_count = args.color_count
         raw = args.raw
         crop_box = args.crop_box
+        email = args.email
 
         try:
             timer = Timer()
@@ -118,8 +125,25 @@ def create_app(test_config=None):
                 return markup
 
             timer.start_timer('Markup Upload')
-            cuid_str = upload_markup(markup, S3_BUCKET)
+            cuid_str = upload_markup(markup, R2_BUCKET_NAME)
+            image_url = f"{R2_PUBLIC_DOMAIN.rstrip('/')}/{cuid_str}"
             timer.end_timer()
+
+            if email and DATABASE_URL:
+                timer.start_timer('Database Insert')
+                try:
+                    conn = psycopg2.connect(DATABASE_URL)
+                    cursor = conn.cursor()
+                    cursor.execute(
+                        "INSERT INTO vectorizations (email, image_url) VALUES (%s, %s)",
+                        (email, image_url)
+                    )
+                    conn.commit()
+                    cursor.close()
+                    conn.close()
+                except Exception as db_e:
+                    app.logger.error(f"Failed to insert into postgres: {db_e}")
+                timer.end_timer()
 
             timer.start_timer('Bounds Creation')
             bounds = compound_paths_bounds(compound_paths)
@@ -130,6 +154,7 @@ def create_app(test_config=None):
             return jsonify({
                 'success': True,
                 'objectId': cuid_str,
+                'image_url': image_url,
                 'info': {
                     'bounds': bounds,
                     'image_width': width,
