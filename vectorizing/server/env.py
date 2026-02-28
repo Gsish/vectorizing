@@ -18,13 +18,26 @@ class VariableNotDefinedException(Exception):
     pass
 
 def get_required():
-    missing_required = any([
-        not key in os.environ
-        for key in REQUIRED_ENVIRONMENT_VARIABLES
-    ])
+    missing_keys = [
+        key for key in REQUIRED_ENVIRONMENT_VARIABLES
+        if key not in os.environ
+    ]
 
-    if missing_required:
-        raise VariableNotDefinedException()
+    invalid_types = []
+    for key, cast in REQUIRED_ENVIRONMENT_VARIABLES.items():
+        if key in os.environ:
+            try:
+                cast(os.environ[key])
+            except ValueError:
+                invalid_types.append(key)
+
+    if missing_keys or invalid_types:
+        err_msg = ""
+        if missing_keys:
+            err_msg += f"Missing variables: {', '.join(missing_keys)}. "
+        if invalid_types:
+            err_msg += f"Invalid types for: {', '.join(invalid_types)}. "
+        raise VariableNotDefinedException(err_msg)
 
     return [
         cast(os.environ[key])
